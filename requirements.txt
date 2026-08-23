@@ -7,3 +7,4 @@ sqlmodel
 asyncpg
 psycopg2-binary
 pydantic-settings
+qdrant-client[fastembed]
