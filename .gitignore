@@ -1,15 +1,62 @@
-node_modules/
-.env
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]          # .pyc, .pyo, .pyd compiled bytecode
+*.pyd              # Windows compiled extension
+.Python
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Distribution / packaging
 dist/
 build/
+*.egg-info/
+*.egg
+.eggs/
+
+# ── Environment & Secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example      # keep the example template
+
+# ── Database ──────────────────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Testing & Coverage ────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
 coverage/
+htmlcov/
+
+# ── Type checking ─────────────────────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+
+# ── Linting / formatting ─────────────────────────────────────────────────────
+.ruff_cache/
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
 logs/
 *.log
-.DS_Store
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-venv/
-.venv/
-*.pyc
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Editor / IDE ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Node (if any frontend tooling is added later) ────────────────────────────
+node_modules/
