@@ -3,3 +3,7 @@ uvicorn[standard]
 gunicorn
 python-dotenv
 pydantic
+sqlmodel
+asyncpg
+psycopg2-binary
+pydantic-settings
