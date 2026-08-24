@@ -24,13 +24,55 @@ qdrant_async = AsyncQdrantClient(
 URDU_SPECIFIC_CHARS = set("ٹڈڑںےھگپچژ")
 
 URDU_GRAMMAR_WORDS = {
-    "کیا", "کیوں", "کیسے", "کب", "کہاں", "کون", "کونسا", "کونسی",
-    "ہے", "ہیں", "ہوں", "ہو", "تھا", "تھی", "تھے",
-    "گا", "گی", "گے",
-    "کا", "کی", "کے", "کو", "سے", "پر", "میں", "تک",
-    "اور", "نہیں", "نہ", "یہ", "وہ", "آپ", "تم", "ہم", "مجھے", "ہمارا", "میرا",
-    "بارے", "بتائیں", "بتاؤ", "کریں", "کرو", "چاہئے", "والا", "والی", "والے",
-    "شکریہ", "معلومات", "کچھ"
+    "کیا",
+    "کیوں",
+    "کیسے",
+    "کب",
+    "کہاں",
+    "کون",
+    "کونسا",
+    "کونسی",
+    "ہے",
+    "ہیں",
+    "ہوں",
+    "ہو",
+    "تھا",
+    "تھی",
+    "تھے",
+    "گا",
+    "گی",
+    "گے",
+    "کا",
+    "کی",
+    "کے",
+    "کو",
+    "سے",
+    "پر",
+    "میں",
+    "تک",
+    "اور",
+    "نہیں",
+    "نہ",
+    "یہ",
+    "وہ",
+    "آپ",
+    "تم",
+    "ہم",
+    "مجھے",
+    "ہمارا",
+    "میرا",
+    "بارے",
+    "بتائیں",
+    "بتاؤ",
+    "کریں",
+    "کرو",
+    "چاہئے",
+    "والا",
+    "والی",
+    "والے",
+    "شکریہ",
+    "معلومات",
+    "کچھ",
 }
 
 # ── Greeting / Small Talk Patterns ───────────────────────────────────────────
@@ -40,7 +82,7 @@ GREETING_PATTERNS = [
     r"^\s*(how\s+are\s+you|who\s+are\s+you|what\s+can\s+you\s+do|what\s+is\s+your\s+name)\b",
     r"^\s*(thanks|thank\s+you|thx|bye|goodbye|cya)\b",
     r"^\s*(السلام\s+عليكم|سلام|مرحبا|أهلا|اهلا|كيف\s+حالك|من\s+أنت|من\s+انت|شكرا|مع\s+السلامة|صباح\s+الخير|مساء\s+الخير)\b",
-    r"^\s*(اسلام\s+علیکم|السلام\s+علیکم|سلام\s+علیکم|کیسے\s+ہو|کیسے\s+ہیں|آپ\s+کون\s+ہیں|شکریہ|اللہ\s+حافظ|خدا\s+حافظ)\b"
+    r"^\s*(اسلام\s+علیکم|السلام\s+علیکم|سلام\s+علیکم|کیسے\s+ہو|کیسے\s+ہیں|آپ\s+کون\s+ہیں|شکریہ|اللہ\s+حافظ|خدا\s+حافظ)\b",
 ]
 
 
@@ -77,7 +119,9 @@ def is_greeting(query: str) -> bool:
 
 
 async def get_query_embedding(query: str) -> List[float]:
-    print(f"🔢 [Step 2] Generating embedding for query using '{settings.EMBEDDING_MODEL}'...")
+    print(
+        f"🔢 [Step 2] Generating embedding for query using '{settings.EMBEDDING_MODEL}'..."
+    )
     response = await openai_async.embeddings.create(
         model=settings.EMBEDDING_MODEL,
         input=query.strip(),
@@ -93,7 +137,9 @@ async def search_qdrant(
     limit: int = 10,
     threshold: float = 0.70,
 ) -> List[Dict[str, Any]]:
-    print(f"🔍 [Step 3] Searching Qdrant (Collection: '{settings.COLLECTION_NAME}', lang: '{lang}', limit: {limit}, threshold: {threshold})...")
+    print(
+        f"🔍 [Step 3] Searching Qdrant (Collection: '{settings.COLLECTION_NAME}', lang: '{lang}', limit: {limit}, threshold: {threshold})..."
+    )
     try:
         search_res = await qdrant_async.query_points(
             collection_name=settings.COLLECTION_NAME,
@@ -109,8 +155,12 @@ async def search_qdrant(
         for idx, p in enumerate(search_res.points, 1):
             vid = p.payload.get("verse_id")
             surah = p.payload.get("surah_name_roman")
-            passed = "✅ PASS" if p.score >= threshold else "❌ FILTERED (below threshold)"
-            print(f"      {idx:>2}. Verse: {vid:<7} ({surah:<14}) | Score: {p.score:.4f} -> {passed}")
+            passed = (
+                "✅ PASS" if p.score >= threshold else "❌ FILTERED (below threshold)"
+            )
+            print(
+                f"      {idx:>2}. Verse: {vid:<7} ({surah:<14}) | Score: {p.score:.4f} -> {passed}"
+            )
 
         # Filter by similarity threshold
         filtered_points = [
@@ -124,7 +174,9 @@ async def search_qdrant(
         ]
 
         top_candidates = filtered_points[:5]
-        print(f"📊 [Step 4] Candidates passing threshold (>= {threshold}): {len(filtered_points)} (Kept top {len(top_candidates)})")
+        print(
+            f"📊 [Step 4] Candidates passing threshold (>= {threshold}): {len(filtered_points)} (Kept top {len(top_candidates)})"
+        )
         return top_candidates
     except Exception as e:
         print(f"❌ [Error] Qdrant search failed: {e}")
@@ -146,11 +198,15 @@ async def hydrate_ayahs(
 
     # Try fast In-Memory Cache first
     if AYAH_CACHE:
-        print(f"⚡ [Step 5] Instant in-memory hydration from cache for {len(verse_matches)} verses (0.01ms)...")
+        print(
+            f"⚡ [Step 5] Instant in-memory hydration from cache for {len(verse_matches)} verses (0.01ms)..."
+        )
         hydrated = hydrate_from_cache(verse_matches, lang)
         if hydrated:
             for idx, s in enumerate(hydrated, 1):
-                print(f"      {idx}. [{s['surah_name_roman']} {s['verse_id']}] (Score: {s['similarity_score']})")
+                print(
+                    f"      {idx}. [{s['surah_name_roman']} {s['verse_id']}] (Score: {s['similarity_score']})"
+                )
             return hydrated
 
     # Fallback to PostgreSQL
@@ -176,20 +232,26 @@ async def hydrate_ayahs(
             row = rows_by_vid.get(vid)
             if not row:
                 continue
-            user_translation = row["text_urdu"] if lang == "ur" and row.get("text_urdu") else row.get("text_english", "")
-            hydrated_sources.append({
-                "verse_id": row["verse_id"],
-                "surah_number": row["surah_number"],
-                "ayah_number": row["ayah_number"],
-                "surah_name_roman": row["surah_name_roman"],
-                "surah_name_english": row["surah_name_english"],
-                "surah_name_arabic": row["surah_name_arabic"],
-                "place_of_revelation": row["place_of_revelation"],
-                "text_arabic": row["text_arabic"],
-                "translation": user_translation,
-                "main_themes": row.get("main_themes"),
-                "similarity_score": round(match["score"], 4),
-            })
+            user_translation = (
+                row["text_urdu"]
+                if lang == "ur" and row.get("text_urdu")
+                else row.get("text_english", "")
+            )
+            hydrated_sources.append(
+                {
+                    "verse_id": row["verse_id"],
+                    "surah_number": row["surah_number"],
+                    "ayah_number": row["ayah_number"],
+                    "surah_name_roman": row["surah_name_roman"],
+                    "surah_name_english": row["surah_name_english"],
+                    "surah_name_arabic": row["surah_name_arabic"],
+                    "place_of_revelation": row["place_of_revelation"],
+                    "text_arabic": row["text_arabic"],
+                    "translation": user_translation,
+                    "main_themes": row.get("main_themes"),
+                    "similarity_score": round(match["score"], 4),
+                }
+            )
         return hydrated_sources
 
     return []
@@ -216,7 +278,77 @@ GUIDELINES:
 """
 
 
-def _prepare_prompts(query: str, lang: str, sources: List[Dict[str, Any]], is_greeting_query: bool):
+def build_search_query(
+    query: str, history: Optional[List[Dict[str, str]]] = None
+) -> str:
+    """If follow-up query is brief or refers to prior turns, combine with previous topic for higher vector recall."""
+    cleaned = query.strip()
+    if not history:
+        return cleaned
+
+    words = cleaned.split()
+    pronouns = {
+        "it",
+        "this",
+        "that",
+        "these",
+        "those",
+        "they",
+        "them",
+        "earlier",
+        "previous",
+        "above",
+        "mentioned",
+        "second",
+        "first",
+        "last",
+        "more",
+        "explain",
+        "detail",
+        "tell",
+        "what",
+        "how",
+        "why",
+        "about",
+        "اس",
+        "ان",
+        "یہ",
+        "وہ",
+        "مزید",
+        "پہلی",
+        "دوسری",
+        "بارے",
+        "بتائیں",
+        "وضاحت",
+        "ذلك",
+        "هذا",
+        "هذه",
+        "تلك",
+        "المذكورة",
+        "السابقة",
+        "المزيد",
+        "وضح",
+        "اشرح",
+    }
+    has_pronoun = any(w.lower().strip("?,.!") in pronouns for w in words)
+
+    if (len(words) <= 8 and has_pronoun) or len(words) <= 3:
+        last_user = next(
+            (h["content"] for h in reversed(history) if h.get("role") == "user"), None
+        )
+        if last_user and last_user.strip() != cleaned:
+            enriched = f"{last_user.strip()} — {cleaned}"
+            return enriched
+    return cleaned
+
+
+def _prepare_prompts(
+    query: str,
+    lang: str,
+    sources: List[Dict[str, Any]],
+    is_greeting_query: bool,
+    history: Optional[List[Dict[str, str]]] = None,
+) -> List[Dict[str, str]]:
     system_prompt = build_system_prompt(lang)
 
     if is_greeting_query:
@@ -230,12 +362,25 @@ def _prepare_prompts(query: str, lang: str, sources: List[Dict[str, Any]], is_gr
         context_text = "\n".join(context_blocks)
         user_prompt = f"User Question: {query}\n\nQuranic Verses Context:\n{context_text}\n\nProvide a concise and well-referenced answer:"
     else:
-        user_prompt = f"User Question: {query}\n\nNote: No specific verses reached the relevance threshold. Please clarify politely and offer brief, respectful guidance."
+        user_prompt = f"User Question: {query}\n\nNote: No specific verses reached the relevance threshold. Please clarify politely and offer brief, respectful guidance based on the conversation context."
 
-    return [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
+    prompt_messages: List[Dict[str, str]] = [
+        {"role": "system", "content": system_prompt}
     ]
+
+    # Append up to last 6 prior conversation turns for tight multi-turn context
+    if history:
+        valid_turns = [
+            {"role": t["role"], "content": t["content"]}
+            for t in history
+            if isinstance(t, dict)
+            and t.get("role") in ("user", "assistant")
+            and t.get("content")
+        ]
+        prompt_messages.extend(valid_turns[-6:])
+
+    prompt_messages.append({"role": "user", "content": user_prompt})
+    return prompt_messages
 
 
 async def generate_llm_answer(
@@ -243,10 +388,13 @@ async def generate_llm_answer(
     lang: str,
     sources: List[Dict[str, Any]],
     is_greeting_query: bool,
+    history: Optional[List[Dict[str, str]]] = None,
 ) -> str:
-    """Non-streaming generation with max_tokens cap (fast response)."""
-    messages = _prepare_prompts(query, lang, sources, is_greeting_query)
-    print(f"🤖 [Step 6] Generating concise answer with '{settings.CHAT_MODEL}' (max_tokens=400)...")
+    """Non-streaming generation with multi-turn history and max_tokens cap."""
+    messages = _prepare_prompts(query, lang, sources, is_greeting_query, history)
+    print(
+        f"🤖 [Step 6] Generating concise answer with '{settings.CHAT_MODEL}' (turns={len(messages)})..."
+    )
 
     response = await openai_async.chat.completions.create(
         model=settings.CHAT_MODEL,
@@ -265,10 +413,13 @@ async def generate_llm_answer_stream(
     lang: str,
     sources: List[Dict[str, Any]],
     is_greeting_query: bool,
+    history: Optional[List[Dict[str, str]]] = None,
 ) -> AsyncGenerator[str, None]:
-    """Streaming generator yielding text chunks in real-time."""
-    messages = _prepare_prompts(query, lang, sources, is_greeting_query)
-    print(f"⚡ [Step 6] Streaming response with '{settings.CHAT_MODEL}' in real-time...")
+    """Streaming generator yielding text chunks with multi-turn history support."""
+    messages = _prepare_prompts(query, lang, sources, is_greeting_query, history)
+    print(
+        f"⚡ [Step 6] Streaming response with '{settings.CHAT_MODEL}' in real-time (turns={len(messages)})..."
+    )
 
     stream = await openai_async.chat.completions.create(
         model=settings.CHAT_MODEL,

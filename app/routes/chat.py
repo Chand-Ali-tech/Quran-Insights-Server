@@ -19,6 +19,7 @@ from app.config.settings import settings
 from app.services.rag_service import (
     detect_language,
     is_greeting,
+    build_search_query,
     get_query_embedding,
     search_qdrant,
     hydrate_ayahs,
@@ -33,6 +34,12 @@ router = APIRouter(prefix="/chat", tags=["Chat & Q&A"])
 #  REQUEST & RESPONSE SCHEMAS
 # ─────────────────────────────────────────────────────────────────────────────
 
+
+class ChatMessageHistory(BaseModel):
+    role: str = Field(..., description="Role: 'user' or 'assistant'")
+    content: str = Field(..., description="Message text")
+
+
 class ChatRequest(BaseModel):
     query: str = Field(
         ...,
@@ -44,6 +51,10 @@ class ChatRequest(BaseModel):
         description="Optional similarity cutoff (0.0 to 1.0). Defaults to server configuration (0.70).",
         ge=0.0,
         le=1.0,
+    )
+    history: Optional[List[ChatMessageHistory]] = Field(
+        default=None,
+        description="Prior conversation history turns for multi-turn conversational context.",
     )
 
 
@@ -72,6 +83,7 @@ class ChatResponse(BaseModel):
 #  1. STANDARD JSON ENDPOINT (Fast ~2s Response)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @router.post(
     "",
     response_model=ChatResponse,
@@ -91,11 +103,16 @@ async def chat_endpoint(
         )
 
     print("\n" + "=" * 70)
-    print(f"📥 [RAG JSON] Incoming query: \"{query_text}\"")
+    print(f'📥 [RAG JSON] Incoming query: "{query_text}"')
 
     lang = detect_language(query_text)
     greeting = is_greeting(query_text)
-    print(f"🌐 [Step 1] Lang: '{lang}' | is_greeting: {greeting}")
+    history_dicts = (
+        [h.model_dump() for h in request.history] if request.history else None
+    )
+    print(
+        f"🌐 [Step 1] Lang: '{lang}' | is_greeting: {greeting} | History turns: {len(history_dicts) if history_dicts else 0}"
+    )
 
     sources: List[SourceAyah] = []
 
@@ -106,10 +123,12 @@ async def chat_endpoint(
             lang=lang,
             sources=[],
             is_greeting_query=True,
+            history=history_dicts,
         )
     else:
         try:
-            query_vector = await get_query_embedding(query_text)
+            search_text = build_search_query(query_text, history_dicts)
+            query_vector = await get_query_embedding(search_text)
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
@@ -141,6 +160,7 @@ async def chat_endpoint(
             lang=lang,
             sources=[s.model_dump() for s in sources],
             is_greeting_query=False,
+            history=history_dicts,
         )
 
     elapsed = time.perf_counter() - start_time
@@ -159,6 +179,7 @@ async def chat_endpoint(
 # ─────────────────────────────────────────────────────────────────────────────
 #  2. REAL-TIME STREAMING ENDPOINT (First Token in ~0.8s)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @router.post(
     "/stream",
@@ -184,11 +205,15 @@ async def chat_stream_endpoint(
 
     lang = detect_language(query_text)
     greeting = is_greeting(query_text)
+    history_dicts = (
+        [h.model_dump() for h in request.history] if request.history else None
+    )
 
     sources_list: List[dict] = []
 
     if not greeting:
-        query_vector = await get_query_embedding(query_text)
+        search_text = build_search_query(query_text, history_dicts)
+        query_vector = await get_query_embedding(search_text)
         threshold = (
             request.similarity_threshold
             if request.similarity_threshold is not None
@@ -224,6 +249,7 @@ async def chat_stream_endpoint(
             lang=lang,
             sources=sources_list,
             is_greeting_query=greeting,
+            history=history_dicts,
         ):
             token_event = {"type": "token", "content": token}
             yield f"data: {json.dumps(token_event, ensure_ascii=False)}\n\n"
