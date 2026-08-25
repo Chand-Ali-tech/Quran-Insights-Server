@@ -22,6 +22,11 @@ build/
 .env.*
 !.env.example      # keep the example template
 
+# ── Large Datasets & Cloud CLI ───────────────────────────────────────────────
+app/data/*.json
+.fastapi/
+.fastapicloud/
+
 # ── Database ──────────────────────────────────────────────────────────────────
 *.db
 *.sqlite

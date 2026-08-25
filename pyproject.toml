@@ -1,0 +1,42 @@
+[project]
+name = "quran-insights-server"
+version = "1.0.0"
+description = "FastAPI backend for Quran Insights: AI-powered RAG Q&A, Ayah intelligence, and authentic Quranic wisdom."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi[standard]>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.8.0",
+    "pydantic-settings>=2.4.0",
+    "sqlmodel>=0.0.22",
+    "sqlalchemy>=2.0.30",
+    "asyncpg>=0.29.0",
+    "psycopg2-binary>=2.9.9",
+    "qdrant-client>=1.11.0",
+    "openai>=1.40.0",
+    "httpx>=0.27.0",
+    "python-dotenv>=1.0.1",
+    "loguru>=0.7.2",
+    "gunicorn>=22.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+"app" = ["data/*.json", "data/*.md"]
+
+[tool.fastapi]
+entrypoint = "app.server:app"

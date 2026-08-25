@@ -259,22 +259,23 @@ async def hydrate_ayahs(
 
 def build_system_prompt(lang: str) -> str:
     lang_instruction = {
-        "ur": "You MUST respond strictly in concise, natural URDU (اردو).",
-        "ar": "You MUST respond strictly in concise, classical ARABIC (العربية).",
-        "en": "You MUST respond in concise, clear ENGLISH.",
-    }.get(lang, "You MUST respond in concise, clear English.")
+        "ur": "You MUST respond strictly in clean, authentic URDU (اردو).",
+        "ar": "You MUST respond strictly in classical ARABIC (العربية).",
+        "en": "You MUST respond in clear, easy-to-understand ENGLISH.",
+    }.get(lang, "You MUST respond in clear, easy-to-understand English.")
 
-    return f"""You are 'Quran Insights Assistant', a wise and authentic Islamic AI guide.
+    return f"""You are 'Quran Insights Assistant', a wise, authentic, and clear Islamic AI guide.
 
 LANGUAGE REQUIREMENT:
 {lang_instruction}
 
-GUIDELINES:
-1. Provide a direct, concise, and inspiring answer. Avoid lengthy introductory fluff.
-2. Ground your explanation in the provided Quranic verses from the context.
-3. Explicitly cite the Surah name and Verse ID (e.g. [Surah Al-Baqarah 2:153] or [سورۃ البقرہ 2:153]).
-4. If no matching verses were found, politely state that no directly matching verse reached the high similarity threshold.
-5. Keep the total response focused and concise (around 2-3 structured paragraphs or bullet points).
+FORMAT & STRUCTURE GUIDELINES:
+1. Present your explanation in clear, structured bullet points (•) or numbered key takeaways so it is effortless for the user to read and understand.
+2. Bold (**important words**) such as core Quranic concepts, virtues (e.g. **Sabr (Patience)**, **Tawakkul (Trust in Allah)**, **Dhikr (Remembrance)**), key rulings, and spiritual benefits to make them visually prominent and easy to scan.
+3. You may begin with a single brief introductory sentence, followed directly by concise, thematic bullet points.
+4. Ground each point in the provided Quranic verses from the context, citing the Surah name and Verse ID (e.g. [Surah Al-Baqarah 2:153] or [سورۃ البقرہ 2:153]).
+5. Avoid dense walls of paragraph text. Keep each bullet point focused, impactful, and easy to digest.
+6. If no specific verses reached the relevance threshold, offer brief, respectful guidance in concise bullet points.
 """
 
 
@@ -360,9 +361,9 @@ def _prepare_prompts(
                 f"- [{s['surah_name_roman']} {s['verse_id']}] {s['text_arabic']} | Translation: {s['translation']}"
             )
         context_text = "\n".join(context_blocks)
-        user_prompt = f"User Question: {query}\n\nQuranic Verses Context:\n{context_text}\n\nProvide a concise and well-referenced answer:"
+        user_prompt = f"User Question: {query}\n\nQuranic Verses Context:\n{context_text}\n\nProvide a structured, easy-to-read explanation in clear bullet points based on the verses above:"
     else:
-        user_prompt = f"User Question: {query}\n\nNote: No specific verses reached the relevance threshold. Please clarify politely and offer brief, respectful guidance based on the conversation context."
+        user_prompt = f"User Question: {query}\n\nNote: No specific verses reached the relevance threshold. Please provide respectful, concise guidance in bullet points based on the conversation context."
 
     prompt_messages: List[Dict[str, str]] = [
         {"role": "system", "content": system_prompt}
@@ -400,7 +401,7 @@ async def generate_llm_answer(
         model=settings.CHAT_MODEL,
         messages=messages,
         temperature=0.3,
-        max_tokens=400,
+        max_tokens=550,
     )
 
     answer = response.choices[0].message.content.strip()
@@ -425,7 +426,7 @@ async def generate_llm_answer_stream(
         model=settings.CHAT_MODEL,
         messages=messages,
         temperature=0.3,
-        max_tokens=400,
+        max_tokens=550,
         stream=True,
     )
 
