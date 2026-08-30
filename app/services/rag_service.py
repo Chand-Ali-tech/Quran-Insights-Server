@@ -1,6 +1,7 @@
+import os
 import re
 import logging
-from typing import List, Dict, Any, AsyncGenerator
+from typing import List, Dict, Any, AsyncGenerator, Optional
 from openai import AsyncOpenAI
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue
@@ -12,8 +13,49 @@ from app.services.cache_service import AYAH_CACHE, hydrate_from_cache
 
 logger = logging.getLogger(__name__)
 
-# ── Clients (Reused connection pools) ─────────────────────────────────────────
-openai_async = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+# ── LangSmith Observability Setup ─────────────────────────────────────────────
+# Uses ONLY the lightweight `langsmith` package — no LangChain required.
+# Enable by setting LANGCHAIN_TRACING_V2=true and LANGCHAIN_API_KEY in .env
+os.environ.setdefault("LANGCHAIN_TRACING_V2", settings.LANGCHAIN_TRACING_V2)
+os.environ.setdefault("LANGCHAIN_API_KEY", settings.LANGCHAIN_API_KEY)
+os.environ.setdefault("LANGCHAIN_PROJECT", settings.LANGCHAIN_PROJECT)
+os.environ.setdefault("LANGCHAIN_ENDPOINT", settings.LANGCHAIN_ENDPOINT)
+
+_tracing_enabled = (
+    settings.LANGCHAIN_TRACING_V2.lower() == "true"
+    and bool(settings.LANGCHAIN_API_KEY)
+)
+
+if _tracing_enabled:
+    try:
+        from langsmith import traceable
+        from langsmith.wrappers import wrap_openai
+        # wrap_openai patches the client so every embeddings.create() and
+        # chat.completions.create() call is automatically traced in LangSmith
+        # — no other code changes needed.
+        openai_async = wrap_openai(AsyncOpenAI(api_key=settings.OPENAI_API_KEY))
+        logger.info(
+            "✅ LangSmith tracing ENABLED — dashboard: https://smith.langchain.com"
+            " | project: '%s'", settings.LANGCHAIN_PROJECT
+        )
+    except ImportError:
+        logger.warning(
+            "⚠️  langsmith package not found. Install it: pip install langsmith"
+        )
+        def traceable(**kw):           # no-op fallback
+            return lambda f: f
+        openai_async = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+else:
+    # Tracing disabled — plain client, zero overhead in production
+    def traceable(**kw):               # no-op — decorator does nothing
+        return lambda f: f
+    openai_async = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    logger.info(
+        "ℹ️  LangSmith tracing DISABLED "
+        "(set LANGCHAIN_TRACING_V2=true + LANGCHAIN_API_KEY in .env to enable)"
+    )
+
+# ── Qdrant Client (Reused async connection pool) ──────────────────────────────
 qdrant_async = AsyncQdrantClient(
     url=settings.QDRANT_CLUSTER_ENDPOINT,
     api_key=settings.QDRANT_API_KEY,
@@ -24,55 +66,12 @@ qdrant_async = AsyncQdrantClient(
 URDU_SPECIFIC_CHARS = set("ٹڈڑںےھگپچژ")
 
 URDU_GRAMMAR_WORDS = {
-    "کیا",
-    "کیوں",
-    "کیسے",
-    "کب",
-    "کہاں",
-    "کون",
-    "کونسا",
-    "کونسی",
-    "ہے",
-    "ہیں",
-    "ہوں",
-    "ہو",
-    "تھا",
-    "تھی",
-    "تھے",
-    "گا",
-    "گی",
-    "گے",
-    "کا",
-    "کی",
-    "کے",
-    "کو",
-    "سے",
-    "پر",
-    "میں",
-    "تک",
-    "اور",
-    "نہیں",
-    "نہ",
-    "یہ",
-    "وہ",
-    "آپ",
-    "تم",
-    "ہم",
-    "مجھے",
-    "ہمارا",
-    "میرا",
-    "بارے",
-    "بتائیں",
-    "بتاؤ",
-    "کریں",
-    "کرو",
-    "چاہئے",
-    "والا",
-    "والی",
-    "والے",
-    "شکریہ",
-    "معلومات",
-    "کچھ",
+    "کیا", "کیوں", "کیسے", "کب", "کہاں", "کون", "کونسا", "کونسی",
+    "ہے", "ہیں", "ہوں", "ہو", "تھا", "تھی", "تھے", "گا", "گی", "گے",
+    "کا", "کی", "کے", "کو", "سے", "پر", "میں", "تک", "اور", "نہیں",
+    "نہ", "یہ", "وہ", "آپ", "تم", "ہم", "مجھے", "ہمارا", "میرا",
+    "بارے", "بتائیں", "بتاؤ", "کریں", "کرو", "چاہئے", "والا", "والی",
+    "والے", "شکریہ", "معلومات", "کچھ",
 }
 
 # ── Greeting / Small Talk Patterns ───────────────────────────────────────────
@@ -118,7 +117,11 @@ def is_greeting(query: str) -> bool:
     return False
 
 
+@traceable(name="quran-embed-query", run_type="embedding")
 async def get_query_embedding(query: str) -> List[float]:
+    """Step 2 — Generate OpenAI embedding for the user query.
+    LangSmith traces: model, input text, latency, token count.
+    """
     print(
         f"🔢 [Step 2] Generating embedding for query using '{settings.EMBEDDING_MODEL}'..."
     )
@@ -131,12 +134,16 @@ async def get_query_embedding(query: str) -> List[float]:
     return vector
 
 
+@traceable(name="quran-vector-search", run_type="retriever")
 async def search_qdrant(
     query_vector: List[float],
     lang: str,
     limit: int = 10,
     threshold: float = 0.70,
 ) -> List[Dict[str, Any]]:
+    """Step 3 — Cosine similarity search in Qdrant Cloud.
+    LangSmith traces: language filter, results count, similarity scores.
+    """
     print(
         f"🔍 [Step 3] Searching Qdrant (Collection: '{settings.COLLECTION_NAME}', lang: '{lang}', limit: {limit}, threshold: {threshold})..."
     )
@@ -189,7 +196,7 @@ async def hydrate_ayahs(
     session: Optional[AsyncSession],
     lang: str,
 ) -> List[Dict[str, Any]]:
-    """
+    """Step 4 — Hydrate verse metadata from in-memory cache or PostgreSQL.
     Hydrates verses from fast In-Memory Cache (0.01ms).
     Falls back to PostgreSQL if cache is not yet warmed up.
     """
@@ -289,47 +296,11 @@ def build_search_query(
 
     words = cleaned.split()
     pronouns = {
-        "it",
-        "this",
-        "that",
-        "these",
-        "those",
-        "they",
-        "them",
-        "earlier",
-        "previous",
-        "above",
-        "mentioned",
-        "second",
-        "first",
-        "last",
-        "more",
-        "explain",
-        "detail",
-        "tell",
-        "what",
-        "how",
-        "why",
-        "about",
-        "اس",
-        "ان",
-        "یہ",
-        "وہ",
-        "مزید",
-        "پہلی",
-        "دوسری",
-        "بارے",
-        "بتائیں",
-        "وضاحت",
-        "ذلك",
-        "هذا",
-        "هذه",
-        "تلك",
-        "المذكورة",
-        "السابقة",
-        "المزيد",
-        "وضح",
-        "اشرح",
+        "it", "this", "that", "these", "those", "they", "them",
+        "earlier", "previous", "above", "mentioned", "second", "first",
+        "last", "more", "explain", "detail", "tell", "what", "how", "why", "about",
+        "اس", "ان", "یہ", "وہ", "مزید", "پہلی", "دوسری", "بارے", "بتائیں", "وضاحت",
+        "ذلك", "هذا", "هذه", "تلك", "المذكورة", "السابقة", "المزيد", "وضح", "اشرح",
     }
     has_pronoun = any(w.lower().strip("?,.!") in pronouns for w in words)
 
@@ -384,6 +355,7 @@ def _prepare_prompts(
     return prompt_messages
 
 
+@traceable(name="quran-generate-answer", run_type="llm")
 async def generate_llm_answer(
     query: str,
     lang: str,
@@ -391,7 +363,9 @@ async def generate_llm_answer(
     is_greeting_query: bool,
     history: Optional[List[Dict[str, str]]] = None,
 ) -> str:
-    """Non-streaming generation with multi-turn history and max_tokens cap."""
+    """Non-streaming generation with multi-turn history and max_tokens cap.
+    LangSmith traces: full prompt, model, temperature, token usage, cost, latency.
+    """
     messages = _prepare_prompts(query, lang, sources, is_greeting_query, history)
     print(
         f"🤖 [Step 6] Generating concise answer with '{settings.CHAT_MODEL}' (turns={len(messages)})..."
@@ -409,6 +383,7 @@ async def generate_llm_answer(
     return answer
 
 
+@traceable(name="quran-stream-answer", run_type="llm")
 async def generate_llm_answer_stream(
     query: str,
     lang: str,
@@ -416,7 +391,9 @@ async def generate_llm_answer_stream(
     is_greeting_query: bool,
     history: Optional[List[Dict[str, str]]] = None,
 ) -> AsyncGenerator[str, None]:
-    """Streaming generator yielding text chunks with multi-turn history support."""
+    """Streaming generator yielding text chunks with multi-turn history support.
+    LangSmith traces: full prompt, model, first-token latency, total tokens streamed.
+    """
     messages = _prepare_prompts(query, lang, sources, is_greeting_query, history)
     print(
         f"⚡ [Step 6] Streaming response with '{settings.CHAT_MODEL}' in real-time (turns={len(messages)})..."

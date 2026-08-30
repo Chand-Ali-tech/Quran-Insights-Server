@@ -11,6 +11,12 @@ class Settings(BaseSettings):
     COLLECTION_NAME: str = "quran_ayahs"
     SIMILARITY_THRESHOLD: float = 0.40
 
+    # ── LangSmith Observability ) ────────────
+    LANGCHAIN_TRACING_V2: str = "false"   # set "true" to enable
+    LANGCHAIN_API_KEY: str = ""           # LangSmith API key from smith.langchain.com
+    LANGCHAIN_PROJECT: str = "quran-insights"
+    LANGCHAIN_ENDPOINT: str = "https://api.smith.langchain.com"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
