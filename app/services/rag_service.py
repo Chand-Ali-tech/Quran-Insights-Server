@@ -21,34 +21,38 @@ os.environ.setdefault("LANGCHAIN_API_KEY", settings.LANGCHAIN_API_KEY)
 os.environ.setdefault("LANGCHAIN_PROJECT", settings.LANGCHAIN_PROJECT)
 os.environ.setdefault("LANGCHAIN_ENDPOINT", settings.LANGCHAIN_ENDPOINT)
 
-_tracing_enabled = (
-    settings.LANGCHAIN_TRACING_V2.lower() == "true"
-    and bool(settings.LANGCHAIN_API_KEY)
+_tracing_enabled = settings.LANGCHAIN_TRACING_V2.lower() == "true" and bool(
+    settings.LANGCHAIN_API_KEY
 )
 
 if _tracing_enabled:
     try:
         from langsmith import traceable
         from langsmith.wrappers import wrap_openai
+
         # wrap_openai patches the client so every embeddings.create() and
         # chat.completions.create() call is automatically traced in LangSmith
         # — no other code changes needed.
         openai_async = wrap_openai(AsyncOpenAI(api_key=settings.OPENAI_API_KEY))
         logger.info(
             "✅ LangSmith tracing ENABLED — dashboard: https://smith.langchain.com"
-            " | project: '%s'", settings.LANGCHAIN_PROJECT
+            " | project: '%s'",
+            settings.LANGCHAIN_PROJECT,
         )
     except ImportError:
         logger.warning(
             "⚠️  langsmith package not found. Install it: pip install langsmith"
         )
-        def traceable(**kw):           # no-op fallback
+
+        def traceable(**kw):  # no-op fallback
             return lambda f: f
+
         openai_async = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 else:
     # Tracing disabled — plain client, zero overhead in production
-    def traceable(**kw):               # no-op — decorator does nothing
+    def traceable(**kw):  # no-op — decorator does nothing
         return lambda f: f
+
     openai_async = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
     logger.info(
         "ℹ️  LangSmith tracing DISABLED "
@@ -66,12 +70,55 @@ qdrant_async = AsyncQdrantClient(
 URDU_SPECIFIC_CHARS = set("ٹڈڑںےھگپچژ")
 
 URDU_GRAMMAR_WORDS = {
-    "کیا", "کیوں", "کیسے", "کب", "کہاں", "کون", "کونسا", "کونسی",
-    "ہے", "ہیں", "ہوں", "ہو", "تھا", "تھی", "تھے", "گا", "گی", "گے",
-    "کا", "کی", "کے", "کو", "سے", "پر", "میں", "تک", "اور", "نہیں",
-    "نہ", "یہ", "وہ", "آپ", "تم", "ہم", "مجھے", "ہمارا", "میرا",
-    "بارے", "بتائیں", "بتاؤ", "کریں", "کرو", "چاہئے", "والا", "والی",
-    "والے", "شکریہ", "معلومات", "کچھ",
+    "کیا",
+    "کیوں",
+    "کیسے",
+    "کب",
+    "کہاں",
+    "کون",
+    "کونسا",
+    "کونسی",
+    "ہے",
+    "ہیں",
+    "ہوں",
+    "ہو",
+    "تھا",
+    "تھی",
+    "تھے",
+    "گا",
+    "گی",
+    "گے",
+    "کا",
+    "کی",
+    "کے",
+    "کو",
+    "سے",
+    "پر",
+    "میں",
+    "تک",
+    "اور",
+    "نہیں",
+    "نہ",
+    "یہ",
+    "وہ",
+    "آپ",
+    "تم",
+    "ہم",
+    "مجھے",
+    "ہمارا",
+    "میرا",
+    "بارے",
+    "بتائیں",
+    "بتاؤ",
+    "کریں",
+    "کرو",
+    "چاہئے",
+    "والا",
+    "والی",
+    "والے",
+    "شکریہ",
+    "معلومات",
+    "کچھ",
 }
 
 # ── Greeting / Small Talk Patterns ───────────────────────────────────────────
@@ -271,7 +318,6 @@ def build_system_prompt(lang: str) -> str:
         "en": "You MUST respond in clear, easy-to-understand ENGLISH.",
     }.get(lang, "You MUST respond in clear, easy-to-understand English.")
 
-    return f"""You are 'Quran Insights Assistant', a wise, authentic, and clear Islamic AI guide.
     return f"""You are 'Quran Insights Assistant', a wise, authentic, respectful, and authoritative Islamic AI guide.
 
 LANGUAGE REQUIREMENT:
@@ -296,12 +342,8 @@ ACCURACY & SOURCING:
 
 FORMAT & STRUCTURE GUIDELINES:
 1. Present your explanation in clear, structured bullet points (•) or numbered key takeaways so it is effortless for the user to read and understand.
-2. Bold (**important words**) such as core Quranic concepts, virtues (e.g. **Sabr (Patience)**, **Tawakkul (Trust in Allah)**, **Dhikr (Remembrance)**), key rulings, and spiritual benefits to make them visually prominent and easy to scan.
 2. Bold (**important words**) such as core Quranic concepts, virtues (e.g. **Sabr (Patience)**, **Tawakkul (Trust in Allah)**, **Dhikr (Remembrance)**, **Taqwa (God-consciousness)**), key rulings, and spiritual benefits to make them visually prominent and easy to scan.
 3. You may begin with a single brief introductory sentence, followed directly by concise, thematic bullet points.
-4. Ground each point in the provided Quranic verses from the context, citing the Surah name and Verse ID (e.g. [Surah Al-Baqarah 2:153] or [سورۃ البقرہ 2:153]).
-5. Avoid dense walls of paragraph text. Keep each bullet point focused, impactful, and easy to digest.
-6. If no specific verses reached the relevance threshold, offer brief, respectful guidance in concise bullet points.
 4. Avoid dense walls of paragraph text. Keep each bullet point focused, impactful, and easy to digest.
 """
 
@@ -316,11 +358,47 @@ def build_search_query(
 
     words = cleaned.split()
     pronouns = {
-        "it", "this", "that", "these", "those", "they", "them",
-        "earlier", "previous", "above", "mentioned", "second", "first",
-        "last", "more", "explain", "detail", "tell", "what", "how", "why", "about",
-        "اس", "ان", "یہ", "وہ", "مزید", "پہلی", "دوسری", "بارے", "بتائیں", "وضاحت",
-        "ذلك", "هذا", "هذه", "تلك", "المذكورة", "السابقة", "المزيد", "وضح", "اشرح",
+        "it",
+        "this",
+        "that",
+        "these",
+        "those",
+        "they",
+        "them",
+        "earlier",
+        "previous",
+        "above",
+        "mentioned",
+        "second",
+        "first",
+        "last",
+        "more",
+        "explain",
+        "detail",
+        "tell",
+        "what",
+        "how",
+        "why",
+        "about",
+        "اس",
+        "ان",
+        "یہ",
+        "وہ",
+        "مزید",
+        "پہلی",
+        "دوسری",
+        "بارے",
+        "بتائیں",
+        "وضاحت",
+        "ذلك",
+        "هذا",
+        "هذه",
+        "تلك",
+        "المذكورة",
+        "السابقة",
+        "المزيد",
+        "وضح",
+        "اشرح",
     }
     has_pronoun = any(w.lower().strip("?,.!") in pronouns for w in words)
 
